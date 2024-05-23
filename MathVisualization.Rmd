@@ -44,7 +44,8 @@ freq_table <- function(d, prompt = "prompt"){
 
 
 #math_survey <- read_survey("~/Dropbox/Math Hallucinations/MathVisFullData20210802_anonymized.csv")
-math_survey <- read_survey("~/Downloads/Mathematical Visualization_May 22, 2024_17.34.csv")
+#math_survey <- read_survey("~/Downloads/Mathematical Visualization_May 22, 2024_17.34.csv")
+math_survey <- read_survey("mathviz_data_clean.csv")
 math_survey <- math_survey %>% filter(math_ed %in% c("Masters Degree in Math", "Ph.D. in Math", "Some Graduate Coursework"))
 #math_survey <- math_survey %>% filter(Progress == 100)
 math_survey <- math_survey %>% filter(Progress >= 98)
