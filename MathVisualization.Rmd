@@ -1,0 +1,728 @@
+---
+title: "MathVisualization"
+output: 
+  flexdashboard::flex_dashboard:
+    vertical-layout: scroll
+runtime: shiny
+---
+
+
+
+
+```{r "setup"}
+options(shiny.sanitize.errors=FALSE)
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+
+
+library(tidyverse)
+library(qualtRics)
+library(corrplot)
+library(ggwordcloud)
+library(forcats)
+
+
+camel <- function(x){ #function for camel case
+    capit <- function(x) paste0(toupper(substring(x, 1, 1)), substring(x, 2, nchar(x)))
+    sapply(strsplit(x, "\\."), function(x) paste(capit(x), collapse=""))
+}
+
+
+longify <- function(d){
+  pivot_longer(d, 1:ncol(d))
+}
+
+freq_table <- function(d, prompt = "prompt"){
+  (d  %>% group_by_at(1) 
+  %>% summarize(ct= n()) 
+  %>% mutate(prop = ct/sum(ct)
+             , prompt = prompt
+             )
+  %>% arrange(-ct)
+  %>% na.omit()
+  )
+}
+
+
+#math_survey <- read_survey("~/Dropbox/Math Hallucinations/MathVisFullData20210802_anonymized.csv")
+math_survey <- read_survey("~/Downloads/Mathematical Visualization_May 22, 2024_17.34.csv")
+math_survey <- math_survey %>% filter(math_ed %in% c("Masters Degree in Math", "Ph.D. in Math", "Some Graduate Coursework"))
+#math_survey <- math_survey %>% filter(Progress == 100)
+math_survey <- math_survey %>% filter(Progress >= 98)
+yesses <- function(v, yes="Yes"){
+  mean(v==yes, na.rm=T)
+}
+math_survey <- math_survey %>% filter(domains != "jhgfds")
+math_survey <- math_survey %>% mutate(platonist = platonist_1) %>% select(-platonist_1)
+
+#n_bad_rows = 17
+
+#math_survey <- math_survey %>% slice(-c(1:n_bad_rows))
+n_bad_rows = 0
+```
+
+
+```{r "Data Cleaning from Qualtrics", include=FALSE}  
+
+# Make long
+
+# Remove partial data
+
+n_subjects <- length(math_survey$Progress)
+
+```
+
+# Notes
+
+### Notes
+
+Don't forget to include "symbolicvis", which is currently commented out
+
+Also uncomment out the ggplots, once the plots are debugged.
+
+Uncomment "describe"
+
+Uncomment the "noise and business" sections
+# Demographics
+
+## Demographics 
+
+### Education
+
+```{r "Demographics"}
+education_level <- math_survey %>% group_by(math_ed) %>% summarize(ct= length(math_ed)) %>% mutate(math_degree = math_ed %>% gsub("in Math", "", .) %>% gsub("Some Graduate Coursework", "Graduate\nClasses", .) %>% gsub("Masters Degree", "Masters", .))
+#renderTable({education_level})
+renderPlot({
+  (ggplot(education_level, aes(x=math_degree, y=ct, fill=math_degree)) + geom_col() + theme_bw(base_size=15) 
+   #+ coord_flip()
+   + xlab("Math Experience") + ylab("Number of Participants") + theme(legend.position = "none")+scale_fill_viridis_d()
+   )
+  })
+
+```
+
+### Domains 
+```{r "Demographic Domains"}
+domains <- math_survey %>%rowwise %>% mutate(domain = ((strsplit(domains, ",")))) %>% unnest(domain) %>% mutate(domain = tolower(trimws(domain)))
+domains$domain <- (domains$domain %>% gsub("number tgeory", "number theory", .) %>% gsub("but: ", "", .) %>% gsub("/geometric group theory", "", .) %>% gsub("as a math education phd i am a generalist", "math education" ,. ) %>% gsub("k–8 education", "math education", .) %>% gsub(" and pde", "", .) %>% gsub("higher category", "category", .) %>% gsub("surreal numbers general relativiy etc", "surreal numbers", .) %>% gsub("/ model theory", "", .))
+domains <- domains %>% group_by(domain) %>% summarize(ct=length(domain)) %>% arrange(-ct)
+#renderTable({domains})
+renderPlot({
+ggplot(domains, aes(label = domain, size = ct^1.5, color = ct)) +
+    geom_text_wordcloud_area() +
+    scale_size_continuous(range = c(5, 10)) +  # Adjust the range for desired size
+    theme_minimal() +
+    labs(title = "Word Cloud of Domains") +
+    theme(plot.title = element_text(hjust = 0.5))
+})
+```
+
+### Self-reported Platonism
+```{r}
+
+#renderTable({math_survey %>% group_by(platonist) %>% summarize(ct= length(platonist))})
+
+renderPlot({
+  ggplot(math_survey, aes(x = platonist/100)) +
+  stat_density(geom="line", color = "blue", size = 1.2) +
+  geom_histogram(aes(y = ..density..), color = "black", fill = "lightblue", alpha = 0.7) +
+  scale_y_continuous(name = "Histogram") +
+  scale_x_continuous(limits=c(0, 1), labels=scales::percent)+
+  theme_bw(base_size=20) +
+  labs(title = "",
+       x = "Proportion of Time") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+  
+})
+
+```
+
+
+
+## Drawing
+
+### Drawing Exactly Proportions
+
+```{r 'Exact drawing proportions'}
+
+drawing_proportions <- math_survey %>% summarize(
+  draw_prop = yesses(draw)
+)
+
+renderTable({longify(drawing_proportions)})
+
+
+```
+
+### Draw For Whom?
+
+```{r 'drawing for'}
+
+
+renderTable({
+  freq_table(math_survey 
+   %>% select(draw_for)
+   , "draw_for"
+) %>% select(-prompt)
+  })
+
+
+```
+
+
+### Visualization Presence
+
+```{r "Estimate proportion of non-visualizers (pre-registered), then separate them" } 
+
+
+visualization_summary <- math_survey %>% summarize(
+  proportion_zero = mean(prop_of_time_1==0, na.rm=T)
+  , average_time = mean(prop_of_time_1[prop_of_time_1>0], na.rm=T)
+  , sd = sd(prop_of_time_1[prop_of_time_1>0], na.rm=T)
+)
+
+renderTable({longify(visualization_summary)})
+
+```
+
+
+
+# Sensations
+
+## Column 
+### Sensation Distribution
+
+```{r}
+sensory_characteristics <- math_survey %>% summarize(
+  color = mean(visualspatial_1, na.rm=T)
+  , shape = mean(visualspatial_2, na.rm=T)
+  , relative_location  = mean(visualspatial_3, na.rm=T)
+  , tactile = mean(sensory_1, na.rm=T)
+  , auditory = mean(sensory_2, na.rm=T)
+  , olfactory = mean(sensory_3, na.rm=T)
+#  , touchable = 100*yesses(touch)
+#  , symbols = 100*yesses(symbols)
+  , dynamic = mean(dynamic_1, na.rm=T)
+  #, just_symbols = mean(symbolicvis=="Yes", na.rm=T)
+)
+
+
+
+#renderTable({longify(sensory_characteristics)})
+
+```
+
+```{r}
+
+sensory_characteristics_table <- (
+  math_survey %>% mutate(
+    color = visualspatial_1
+    , shape = visualspatial_2
+    , location  = visualspatial_3
+    , tactility = sensory_1
+    , sound = sensory_2
+    , olfaction = sensory_3
+    , movement = dynamic_1
+  
+  ) 
+  %>% select(ResponseId, color:movement)
+  %>% pivot_longer(cols=c(color:movement), names_to="sensory_channel", values_to="value")
+  %>% group_by(sensory_channel)
+  %>% summarize(mean_yes = mean(value>0, na.rm=T)
+                , mean_val = mean(value[value>0], na.rm=T))
+  %>% arrange(-mean_yes)
+)
+renderPlot({
+(
+  ggplot(sensory_characteristics_table %>% arrange(-mean_yes)
+         , aes(x=fct_reorder(sensory_channel, mean_yes), y=mean_yes, fill=sensory_channel, label=sensory_channel
+               , width=mean_val/100))
+  + geom_col(aes(size=mean_val))
+  + coord_flip()
+  + theme_bw(base_size = 16)
+  + theme(legend.position="none")
+  + scale_x_discrete("Experienced Property")
+  + scale_y_continuous("% reporting sensation", labels=scales::percent, limits=c(0,1))
+  # + geom_text(nudge_x=-0.05, nudge_y = -0.05)
+)     
+})
+```
+
+### draw time proportion
+
+
+```{r}
+
+
+renderPlot({
+  ggplot(math_survey, aes(x = prop_of_time_1/100)) +
+  stat_density(geom="line", color = "blue", size = 1.2) +
+  geom_histogram(aes(y = ..density..), color = "black", fill = "lightblue", alpha = 0.7) +
+  scale_y_continuous(name = "Histogram") +
+  scale_x_continuous(limits=c(0, 1), labels=scales::percent)+
+  theme_bw(base_size=20) +
+  labs(title = "",
+       x = "Proportion of Time") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+  
+})
+
+```
+
+
+
+## Touch Yes and No
+
+### Touch Yes
+
+```{r}
+
+renderTable({math_survey %>% group_by(touch_1_TEXT) %>% summarize(ct= length(touch_1_TEXT))})
+
+```
+
+### Touch No 
+```{r}
+
+
+renderTable({math_survey %>% group_by(touch_2_TEXT) %>% summarize(ct= length(touch_2_TEXT))})
+
+```
+
+## Control
+
+### Symbols Yes
+
+```{r}
+
+renderTable({math_survey %>% group_by(symbols_1_TEXT) %>% summarize(ct= length(symbols_1_TEXT))})
+
+```
+
+### Symbols No 
+```{r}
+
+
+renderTable({math_survey %>% group_by(symbols_2_TEXT) %>% summarize(ct= length(symbols_2_TEXT))})
+
+```
+
+# Content
+
+## Content 0
+
+### Proportions
+```{r 'content patterns'}
+
+content_patterns <- math_survey %>% summarize(
+   prop_constraint = yesses(constraint)
+  
+
+)
+
+renderTable({longify(content_patterns)})
+
+
+```
+## Content 1
+
+
+### Constraints
+
+```{r}
+
+renderTable({bind_rows(freq_table(math_survey %>% select(constraint_1_TEXT), "Constraint Yes")
+  , freq_table(math_survey %>% select(constraint_2_TEXT), "Constraint No"))})
+
+```
+
+
+
+### Challenges
+
+```{r}
+challenges <- math_survey %>%rowwise %>%  mutate(challenge = ((strsplit(challenges, ",")))) %>% unnest(challenge) %>% mutate(challenge = trimws(challenge))
+
+
+renderTable({
+  (challenges %>% select(challenge) %>% freq_table() %>% mutate(prop=ct/n_subjects))
+  })
+
+#challenges_indiv_ct <- challenges %>% group_by(StartDate, EndDate) %>% summarize(ct=n()) %>% ungroup()
+```
+
+### plot
+
+```{r challenge plot}
+
+#ggplot(challenges_indiv_ct, aes(x=ct)) + geom_histogram()
+
+```
+
+## Platonism
+
+### Real
+
+```{r}
+
+platonism_patterns <- math_survey %>% summarize(
+  object_real = mean(object_real_4, na.rm=T)
+  , object_exist = mean(Q50_4, na.rm=T)
+  , build_or_see = mean(tail(build_see_1, -n_bad_rows), na.rm=T)
+#  , build_or_see = mean(build_see_1, na.rm=T)
+
+)
+
+renderTable({longify(platonism_patterns)})
+ # ggplot(math_survey, aes(x = build_see_1/100)) +
+ #  stat_density(geom="line", color = "blue", size = 1.2) +
+ #  geom_histogram(aes(y = ..density..), color = "black", fill = "lightblue", alpha = 0.7) +
+ #  scale_y_continuous(name = "Histogram") +
+ #  scale_x_continuous(limits=c(0, 1), labels=scales::percent)+
+ #  theme_bw(base_size=20) +
+ #  labs(title = "",
+ #       x = "Proportion of Time") +
+ #  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+###
+
+```{r}
+
+renderTable({
+  freq_table(math_survey 
+   %>% select(platonist)
+) %>% select(-prompt)
+  })
+
+
+```
+
+# Control
+
+## Control Stats
+
+### Dynamics Sensation
+
+```{r 'dynamic sensation'}
+
+control_patterns <- math_survey %>% summarize(
+    zoom = mean(tail(zoom_2, -n_bad_rows), na.rm=T)
+  , do_touch = 100*yesses(do_touch)
+  , resist_mvmt = resist_mvmt_3 #yesses(resist_mvmt_3)
+  , prop_causal =  yesses(causal)
+
+
+)
+
+renderTable({longify(control_patterns)})
+
+
+```
+
+### Visual Persistence
+
+```{r 'persistence patterns'}
+
+persistence_patterns <- math_survey %>% summarize(
+  appear_unwanted_prop = mean(appear=="Yes", na.rm=T)
+  , fade_unwanted_prop = mean(fade=="Yes", na.rm=T)
+  , remain_present_prop = mean(stay_present=="Yes", na.rm=T)
+  , cannot_stop_seeing_prop =  mean(stop_seeing=="Yes", na.rm=T)
+  , annoyed =  mean(annoyed=="Yes", na.rm=T)
+  , control = mean(control_1, na.rm=T)
+  
+
+)
+
+renderTable({longify(persistence_patterns)})
+
+
+```
+
+
+
+## Explanations
+
+### Causal Control Yes
+
+```{r}
+
+renderTable({math_survey %>% group_by(causal_1_TEXT) %>% summarize(ct= length(causal_1_TEXT))})
+
+```
+
+### Causal Control No 
+```{r}
+
+
+renderTable({math_survey %>% group_by(causal_2_TEXT) %>% summarize(ct= length(touch_2_TEXT))})
+
+```
+
+
+
+### Do Touch Yes
+
+```{r}
+
+renderTable({math_survey %>% group_by(do_touch_1_TEXT) %>% summarize(ct= length(do_touch_1_TEXT))})
+
+```
+
+### Do Touch No 
+```{r}
+
+
+renderTable({math_survey %>% group_by(do_touch_2_TEXT) %>% summarize(ct= length(do_touch_1_TEXT))})
+
+```
+
+## New column
+
+### Uncontrollable Persistence
+
+```{r}
+
+renderTable({
+  bind_rows(
+    freq_table(math_survey 
+       %>% select(appear_1_TEXT)
+      , "draw_for"
+      )
+    ,  freq_table(math_survey 
+       %>% select(fade_1_TEXT)
+      , "Fade"
+      )
+    ,  freq_table(math_survey 
+       %>% select(stay_present_1_TEXT)
+      , "Stay Present"
+      )
+    ,  freq_table(math_survey 
+       %>% select(stop_seeing_1_TEXT)
+      , "Stop Seeing"
+      )      
+  )  %>% na.omit()
+  })
+
+```
+
+
+
+### Cannot Stop Seeing Yes 
+```{r}
+
+
+renderTable({math_survey %>% group_by(stop_seeing_1_TEXT) %>% summarize(ct= length(stop_seeing_1_TEXT)) %>% arrange(-ct)})
+
+```
+
+
+
+
+### Annoyed Yes 
+```{r}
+
+
+renderTable({math_survey %>% group_by(annoyed_1_TEXT) %>% summarize(ct= length(annoyed_1_TEXT)) %>% arrange(-ct)})
+
+```
+
+
+# Cult. of Viv 
+
+
+### Visualization Vividness
+
+
+
+```{r "Change in vividness over time"}
+# Come back here
+
+vividness_summary <- math_survey %>% summarize(
+    session_increasing_vividness = yesses(session_vivid, "More vivid")
+  , session_decreasing_vividness = yesses(session_vivid, "Less vivid")
+  , session_consistent_vividness = mean(session_vivid ==  "They stay consistent in their  vividness", na.rm=T)
+  , session_variable_vividness = yesses(session_vivid,  "It depends on where I am in a reasoning process")+yesses(session_vivid,  "It just depends" )
+  ,  domain_increasing_vividness = mean(domain_vivid == "More  vivid", na.rm=T)
+  ,  domain_decreasing_vividness = mean(domain_vivid == "Less  vivid", na.rm=T)
+    , domain_consistent_vividness = mean(domain_vivid ==  "They stay consistent in their vividness", na.rm=T)
+  , domain_variable_vividness = mean(domain_vivid ==  "It just depends", na.rm=T)
+)
+renderTable({longify(vividness_summary)})
+```
+
+### Isolation Distribution
+
+```{r}
+isolation_characteristics <- math_survey %>% summarize(
+  noise_noisy = mean(tail(noise_noisy_1, -n_bad_rows), na.rm=T)
+  , people_company = mean(tail(people_company_1, -n_bad_rows), na.rm=T)
+  , hands_active = mean(tail(hands_active_1, -n_bad_rows), na.rm=T)
+  , light_bright = mean(tail(light_bright_1, -n_bad_rows), na.rm=T)
+  , space_full = mean(tail(space_full_1, -n_bad_rows), na.rm=T)
+  , surface_present  = mean(tail(surface_need_1, -n_bad_rows), na.rm=T) # one-sided
+
+)
+
+renderTable({longify(isolation_characteristics)})
+
+
+```
+
+
+```{r}
+isolation_characteristics_by_subjects <- (
+  math_survey
+  %>% mutate(busyness_need = noise_noisy_1
+                                +people_company_1
+                                +hands_active_1
+                                +space_full_1
+                                +light_bright_1
+             , pickiness = (abs(noise_noisy_1 - 50)
+                            +abs(people_company_1 - 50)
+                            +abs(hands_active_1 - 50)
+                            +abs(space_full_1 - 50)
+                            +abs(light_bright_1 - 50)
+                            + abs(surface_need_1/2)
+
+             )
+  )
+  %>% select(busyness_need, pickiness)
+)
+
+renderTable(isolation_characteristics_by_subjects)
+
+```
+
+
+# Describe 
+
+## Column
+
+### Descriptions of Visualizations
+
+```{r Descriptions}
+# freq_table(math_survey 
+#        %>% select(describe)
+#       , "describe"
+#       )
+
+```
+
+
+## Vis
+
+### Visualization specialness
+
+```{r Vis special}
+# freq_table(math_survey
+#        %>% select(vis_domain
+#       , "Vis Often"
+#       )
+# )
+
+# renderTable(renderTable({
+#   bind_rows(
+#     freq_table(math_survey 
+#        %>% select(vis_often_3_TEXT)
+#       , "Math Special"
+#       )
+#     ,  freq_table(math_survey 
+#        %>% select(vis_often_4_TEXT)
+#       , "All Domains"
+#       ))
+# })
+```
+
+
+
+
+
+```{r}
+math_survey_rename <- math_survey %>% rename(
+  color = visualspatial_1
+  , shape = visualspatial_2
+  , relative_location = visualspatial_3
+  , tactile = sensory_1
+  , auditory = sensory_2
+  , olfactory = sensory_3
+  , dynamic = dynamic_1
+  , object_real = object_real_4
+  , object_exist = Q50_4
+  , build_or_see = build_see_1
+  , zoom = zoom_2
+  , resist_mvmt = resist_mvmt_3
+  , noise_noisy = noise_noisy_1
+  , hands_active = hands_active_1
+  , light_bright = light_bright_1
+  , hands_active = hands_active_1
+  , space_full = space_full_1
+  , visualization_proportion = prop_of_time_1
+  , people_company = people_company_1
+  , control = control_1
+  , surface_present = surface_need_1 
+
+ 
+) %>% mutate( symbols = unlist(symbols)=="Yes"
+              , prop_causal = unlist(causal) == "Yes"
+              , domain_increasing_vividness = (domain_vivid == "More  vivid")
+              , session_increasing_vividness = (session_vivid == "More vivid")
+         #     , platonist = platonist %in% c("Sometimes", "Yes, always")
+              , constrained = constraint %in% c("Yes")
+               , annoyed = annoyed %in% c("Yes")
+              , appear_unwanted = appear == "Yes"
+              , fade_unwanted = fade == "Yes"
+              , cannot_stop_seeing = stop_seeing == "Yes"
+              , remain_present = stay_present == "Yes"
+              )
+
+math_survey_rename$build_or_see[1:n_bad_rows] <- 0/0
+math_survey_rename$zoom[1:n_bad_rows] <- 0/0
+math_survey_rename$noise_noisy[1:n_bad_rows] <- 0/0
+math_survey_rename$people_company[1:n_bad_rows] <- 0/0
+math_survey_rename$hands_active[1:n_bad_rows] <- 0/0
+math_survey_rename$light_bright[1:n_bad_rows] <- 0/0
+math_survey_rename$space_full[1:n_bad_rows] <- 0/0
+math_survey_rename$surface_present[1:n_bad_rows] <- 0/0
+ 
+ 
+
+msr <-  (math_survey_rename
+         %>% filter(math_ed %in% c("Bachelor Degree in Math"
+                                           , "Ph.D. in Math", "Masters Degree in Math"
+                                           , "Some Graduate Coursework"))
+         %>% select(color, shape, relative_location, tactile, auditory, olfactory
+                    , symbols, dynamic, object_real, object_exist, build_or_see
+                    , zoom, symbols, resist_mvmt, prop_causal, domain_increasing_vividness
+                    , noise_noisy, hands_active, light_bright , hands_active, platonist
+                    , visualization_proportion, space_full, annoyed, constrained
+                    , session_increasing_vividness
+                                       , remain_present
+                                       , cannot_stop_seeing
+                                       , fade_unwanted
+                                       , appear_unwanted
+                                       , control
+                                       , people_company
+                                       , surface_present)  ) 
+
+
+
+
+
+corrplot(cor(msr, use="pairwise.complete.obs"), order='hclust')
+
+
+```
+
+
+
+```{r}
+require(FactoMineR)
+library(missMDA)
+msr.comp <- imputePCA(msr)
+msr.pca <- PCA(msr.comp$completeObs)
+
+```
