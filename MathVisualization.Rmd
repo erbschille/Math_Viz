@@ -1065,6 +1065,44 @@ ggplot(math_survey, aes(x = vis_domain)) +
 
 ```
 
+```{r, fig.asp = 1.5}
+math_survey <- math_survey %>% 
+  mutate(session_vivid = factor(session_vivid, levels = c("They stay consistent in their  vividness", "It just depends", "It depends on where I am in a reasoning process", "More vivid")),
+         domain_vivid = factor(domain_vivid, levels = c("Less  vivid", "They stay consistent in their vividness", "It just depends", "More  vivid")))
+
+ggplot(math_survey, aes(x = session_vivid)) + 
+  geom_bar(fill = "#C3D7A4") + 
+  theme_bw() +
+    geom_text(
+    stat = 'count', 
+    aes(label = ..count..), 
+    vjust = 2
+  ) +
+  labs(
+    title = "Across a math session, visualizations typically become...",
+    x = "Responses",
+    y = "Count"
+  ) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20))
+
+ggplot(math_survey, aes(x = domain_vivid)) + 
+  geom_bar(fill = "#4E84C4") + 
+  theme_bw() +
+    theme_bw() +
+    geom_text(
+    stat = 'count', 
+    aes(label = ..count..), 
+    color = "white",
+    vjust = 1.5
+  ) +
+  labs(
+    title = "As I become expert in a domain, visualizations typically become...",
+    x = "Responses",
+    y = "Count"
+  ) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20))
+```
+
 
 ```{r}
 require(FactoMineR)

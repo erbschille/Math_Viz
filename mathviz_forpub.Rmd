@@ -1,0 +1,485 @@
+---
+title: "Math Visualization for pub"
+author: "Eleanor Schille-Hudson"
+date: "2025-10-09"
+output: html_document
+---
+
+This file includes code and analysis for the paper "Mathematical Hallucination."
+
+```{r "setup"}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, message=FALSE)
+
+library(tidyverse)
+library(qualtRics)
+library(corrplot)
+library(ggwordcloud)
+library(forcats)
+library(ggridges)
+library(hrbrthemes)
+library(viridis)
+library(kableExtra)
+```
+
+```{r "read in data"}
+math_survey_raw <- read_survey("mathviz_data_clean.csv")
+```
+
+```{r "data cleaning"}
+math_survey <- math_survey_raw %>% 
+  filter(math_ed %in% c("Masters Degree in Math", "Ph.D. in Math", "Some Graduate Coursework")) %>% #filtering for expertise
+  filter(Progress >= 98) %>% filter(domains != "jhgfds") %>% #filtering test data
+  mutate(platonist = platonist_1) %>% select(-platonist_1)
+```
+
+# Demographics 
+
+## Education
+
+```{r "Education"}
+education_level <- math_survey %>%
+  group_by(math_ed) %>% 
+  summarize(count= length(math_ed)) %>% 
+  mutate(math_degree = math_ed %>% gsub("in Math", "", .) %>% 
+           gsub("Some Graduate Coursework", "Graduate\nClasses", .) %>% 
+           gsub("Masters Degree", "Masters", .))
+
+ggplot(education_level, aes(x=math_degree, y=count, fill=math_degree)) + 
+  geom_col() + 
+  theme_bw(base_size=15) + 
+  xlab("Math Experience") + ylab("Number of Participants") + 
+  theme(legend.position = "none") + 
+  scale_fill_viridis_d() +
+  theme(legend.position = "none") + 
+  geom_text(aes(label = count),  # Add text on the bars
+            position = position_stack(vjust = 0.5), color = "white", size = 5)
+  
+```
+
+## Domains
+
+```{r "Math Domains"}
+domains <- math_survey %>%
+  rowwise %>% 
+  mutate(domain = ((strsplit(domains, ",")))) %>% 
+  unnest(domain) %>% mutate(domain = tolower(trimws(domain)))
+
+domains$domain <- (domains$domain %>% 
+                     gsub("number tgeory", "number theory", .) %>% gsub("but: ", "", .) %>% gsub("/geometric group theory", "", .) %>% 
+                     gsub("as a math education phd i am a generalist", "math education" ,. ) %>% gsub("k–8 education", "math education", .) %>%
+                     gsub(" and pde", "", .) %>% gsub("higher category", "category", .) %>% 
+                     gsub("surreal numbers general relativiy etc", "surreal numbers", .) %>% gsub("/ model theory", "", .))
+
+domains <- domains %>% 
+  group_by(domain) %>% 
+  summarize(ct=length(domain)) %>% 
+  arrange(-ct)
+
+ggplot(domains, aes(label = domain, size = ct^1.5, color = ct)) +
+    geom_text_wordcloud_area() +
+    scale_size_continuous(range = c(12, 25)) +  # Adjust the range for desired size
+    theme_minimal() +
+    labs(title = "Word Cloud of Domains") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+# Figure 1
+
+```{r "Sensory Character"}
+
+# Calculate the mean value for each sensory_channel
+sensory_characteristics_table <- math_survey %>% 
+  mutate(
+    color = visualspatial_1
+    , shape = visualspatial_2
+    , location  = visualspatial_3
+    , tactility = sensory_1
+    , sound = sensory_2
+    , olfaction = sensory_3
+    , movement = dynamic_1) %>% 
+  select(ResponseId, color:movement) %>% 
+  pivot_longer(cols=c(color:movement), names_to="sensory_channel", values_to="value") %>%
+  group_by(sensory_channel) %>%
+  mutate(mean_value = mean(value, na.rm = TRUE)) %>%
+  ungroup()
+
+# Reorder the sensory_channel factor based on the mean values
+sensory_characteristics_table <- sensory_characteristics_table %>%
+  mutate(sensory_channel = fct_reorder(sensory_channel, mean_value))
+
+# Create the ridgeline plot
+ggplot(sensory_characteristics_table, aes(y = sensory_channel, x = value, fill = sensory_channel)) +
+  geom_density_ridges(alpha = 0.6, bandwidth = 4, trim = TRUE) +
+  scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  scale_fill_viridis(discrete = TRUE) +
+  scale_color_viridis(discrete = TRUE) +
+  theme_ipsum() +
+  theme(
+    legend.position = "none",
+    panel.spacing = unit(0.1, "lines"),
+    strip.text.x = element_text(size = 8)
+  ) +
+  xlab("Response: Never (0) to Always (100)") +
+  ylab("Sensory Modality")
+```
+
+
+# Figure 2
+
+```{r "Cultivating Vividness"}
+math_survey <- math_survey %>% 
+  mutate(session_vivid = factor(session_vivid, levels = c("They stay consistent in their  vividness", "It just depends", "It depends on where I am in a reasoning process", "More vivid")),
+         domain_vivid = factor(domain_vivid, levels = c("Less  vivid", "They stay consistent in their vividness", "It just depends", "More  vivid")))
+
+ggplot(math_survey, aes(x = session_vivid)) + 
+  geom_bar(fill = "#C3D7A4") + 
+  theme_bw() +
+    geom_text(
+    stat = 'count', 
+    aes(label = ..count..), 
+    vjust = 2
+  ) +
+  labs(
+    title = "Across a math session, visualizations typically become...",
+    x = "Responses",
+    y = "Count"
+  ) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20))
+
+ggplot(math_survey, aes(x = domain_vivid)) + 
+  geom_bar(fill = "#4E84C4") + 
+  theme_bw() +
+    theme_bw() +
+    geom_text(
+    stat = 'count', 
+    aes(label = ..count..), 
+    color = "white",
+    vjust = 1.5
+  ) +
+  labs(
+    title = "As I become expert in a domain, visualizations typically become...",
+    x = "Responses",
+    y = "Count"
+  ) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20))
+```
+
+# Figure 3
+
+```{r "Environmental Preferences"}
+
+## rows 1 through 18 have some missing data
+survey_minus_zeros <- math_survey %>% slice(19:72)
+
+pref_characteristics_table <- survey_minus_zeros %>% 
+  mutate(
+    silent = noise_noisy_1
+    , alone = people_company_1
+    , `surface doesn't matter`  = surface_need_1
+    , `hands idle` = hands_active_1
+    , `dim light` = light_bright_1
+    , `empty space` = space_full_1) %>% 
+  select(ResponseId, silent:`empty space`) %>% 
+  pivot_longer(cols=c(silent:`empty space`), names_to="preference", values_to="value") %>%
+  group_by(preference) %>%
+  mutate(mean_value = mean(value, na.rm = TRUE)) %>%
+  ungroup()
+
+#similar ridgline plot but for preferences of environment
+ggplot(pref_characteristics_table, aes(y = preference, x = value, fill = preference)) +
+  geom_density_ridges(alpha = 0.6, bandwidth = 4) +
+  scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  #scale_y_discrete(position = "right") + 
+  scale_fill_viridis(discrete = TRUE) +
+  scale_color_viridis(discrete = TRUE) +
+  theme_ipsum() +
+  theme(
+    legend.position = "none",
+    panel.spacing = unit(0.1, "lines"),
+    strip.text.x = element_text(size = 8)
+  ) +
+  xlab("Response: Must be this way (0) to Must be the opposite (100)") +
+  ylab("Environmental Preferences")
+```
+
+# Table 1
+
+```{r "Unique to Math"}
+# math domain plot 
+
+# Create a vector with the original levels
+original_levels <- c(
+  "I visualize when doing math, but could be any domain.",
+  "I visualize when doing math, only in certain domains.",
+  "I visualize when doing all kinds of things (please list other domains below), but the way I visualize when doing math feels special.",
+  "I visualize when doing all kinds of things (please list other domains below), but the way I visualize when doing math math doesn't feel special."
+)
+
+# Create a vector with the abbreviated labels
+abbreviated_labels <- c(
+  "Visualize in math, any domain",
+  "Visualize in math, certain domains",
+  "Visualize in other, math feels special",
+  "Visualize in other, math doesn't feel special"
+)
+
+# Convert vis_domain to a factor with the original levels, then use the abbreviated labels
+math_survey$vis_domain <- factor(math_survey$vis_domain, levels = original_levels, labels = abbreviated_labels)
+
+# Create the bar chart using ggplot2
+ggplot(math_survey, aes(x = vis_domain)) +
+  geom_bar(color = "black", fill = "lightblue", alpha = 0.7) +
+  geom_text(
+    stat = 'count', 
+    aes(label = ..count..), 
+    vjust = -0.5
+  ) +
+  labs(
+    title = "Visualization in Different Domains",
+    x = "Visualization Domain",
+    y = "Count"
+  ) +
+  theme(axis.text.x = element_text(hjust = 0.5)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20))
+
+
+# Table 1
+
+viz_summary <- math_survey %>% #this chunk makes the appropriate dataframe
+  count(vis_domain, name = "count") %>% 
+  mutate(total = sum(count)) %>%
+  rowwise() %>% 
+  mutate(
+    mean = binom.test(count, total)$estimate,
+    ci_low = binom.test(count, total)$conf.int[1],
+    ci_high = binom.test(count, total)$conf.int[2]
+  ) %>%
+  ungroup() %>% #this chunk formats
+  mutate(
+    mean = scales::percent(mean, accuracy = 1),
+    ci = paste0("(", scales::percent(ci_low, accuracy = 1), ", ",
+                scales::percent(ci_high, accuracy = 1), ")")
+  ) 
+
+#making the table
+viz_summary %>%
+  select(vis_domain, mean, ci) %>% 
+  kbl(
+    col.names = c(
+      "When you visualize in these ways, which feels true for you?",
+      "Mean",
+      "95% CI"
+    ),
+    align = c("l", "c", "c")
+  ) %>%
+  add_header_above(c(" " = 1, "Proportion of Responses" = 2)) %>%
+  kable_styling(
+    full_width = FALSE,
+    position = "center",
+    bootstrap_options = c("striped", "hover", "condensed", "responsive")
+  )
+
+```
+
+# Table 2
+
+```{r "Control Questions"}
+
+# Calculate the mean value for each sensory_channel
+control_table2 <- math_survey %>% 
+  mutate(
+    "Do you have any causal control?" = causal
+    , "Do you experience any constraints in the movement?" = constraint
+    , "Do they ever appear when you didn’t mean for them to?"  = appear
+    , "Do they ever fade or disappear when you didn’t mean for them to?"  = fade
+    , "Do they ever remain present after you are done with them?" = stay_present
+    , "Can’t stop seeing them even if you need to think about other things?" = stop_seeing
+    , "Are you ever annoyed by them?" = annoyed) %>% 
+  dplyr::select(ResponseId, , "Do you have any causal control?":"Are you ever annoyed by them?") %>% 
+  pivot_longer(cols=c("Do you have any causal control?":"Are you ever annoyed by them?"), names_to="question", values_to="response") %>%
+  drop_na(response) %>%
+  group_by(question, response) %>%
+  summarise(count = n()) %>%
+  ungroup() %>% 
+  group_by(question) %>% 
+  mutate(prop_yes = count[response == "Yes"] / sum(count)) %>%  # Compute proportion of "Yes"
+  ungroup() %>% 
+  mutate(question = fct_reorder(question, prop_yes, .na_rm = TRUE))
+
+# Plot: Stacked bar chart for yes/no questions
+ggplot(control_table2, aes(x = question, y = count, fill = response)) +
+  geom_bar(stat = "identity", position = "fill") +  # Use "dodge" for side-by-side bars
+  coord_flip() +  # Flip for readability
+  scale_y_continuous(labels = scales::percent_format()) + # Show proportions
+  labs(x = "Survey Question", y = "Proportion of Responses", fill = "Response") +
+  theme_minimal() +
+  theme(text = element_text(size = 12)) +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 30))
+
+# Table
+control_table2 <- control_table2 %>% 
+  group_by(question) %>%
+  mutate(total = sum(count)) %>% 
+  filter(response == "Yes") %>% 
+  ungroup() %>%
+  rowwise() %>%
+  mutate(
+    mean = binom.test(count, total)$estimate,
+    ci_low = binom.test(count, total)$conf.int[1],
+    ci_high = binom.test(count, total)$conf.int[2]
+  ) %>%
+  ungroup() %>%
+  arrange(desc(mean)) %>%
+  mutate(
+    mean = scales::percent(mean, accuracy = 1),
+    ci = paste0("(", scales::percent(ci_low, accuracy = 1), ", ",
+                scales::percent(ci_high, accuracy = 1), ")")
+  ) 
+
+#making the table
+control_table2 %>%
+  select(question, mean, ci) %>% 
+  kbl(
+    col.names = c(
+      "Survey Question",
+      "Mean",
+      "95% CI"
+    ),
+    align = c("l", "c", "c")
+  ) %>%
+  add_header_above(c(" " = 1, "Proportion of Responses" = 2)) %>%
+  kable_styling(
+    full_width = FALSE,
+    position = "center",
+    bootstrap_options = c("striped", "hover", "condensed", "responsive")
+  )
+
+```
+
+
+
+# Figure 4
+
+```{r "Kind of Control"}
+# Calculate the mean value for each sensory_channel
+control_table <- math_survey %>% 
+  mutate(
+    "How often do the objects resist movement?" = resist_mvmt_3
+    , "Can you zoom in or zoom out on the objects?" = zoom_2
+    , "Can you make the visualizations go away?"  = control_1) %>% 
+  dplyr::select(ResponseId, "How often do the objects resist movement?":"Can you make the visualizations go away?") %>% 
+  pivot_longer(cols=c("How often do the objects resist movement?":"Can you make the visualizations go away?"), names_to="control_type", values_to="value") %>%
+  group_by(control_type) %>%
+  mutate(mean_value = mean(value, na.rm = TRUE)) %>%
+  ungroup()
+
+# Reorder the sensory_channel factor based on the mean values
+control_table <- control_table %>%
+  mutate(control_table = fct_reorder(control_type, mean_value))
+
+# Create the ridgeline plot
+ggplot(control_table, aes(y = control_type, x = value, fill = control_type)) +
+  geom_density_ridges(alpha = 0.6, bandwidth = 4, trim = TRUE) +
+  scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  scale_fill_viridis(discrete = TRUE) +
+  scale_color_viridis(discrete = TRUE) +
+  theme_ipsum() +
+  theme(
+    legend.position = "none",
+    panel.spacing = unit(0.1, "lines"),
+    strip.text.x = element_text(size = 8)
+  ) +
+  xlab("Response: Never (0) to Always (100)") +
+  ylab("Kind of Control")
+```
+
+# Figure 5
+
+```{r "Metaphysical Reality"}
+ontology_table <- math_survey %>% 
+  mutate(
+    `real in some sense` = object_real_4
+    , `physically exist` = Q50_4
+    , `build or discover`  = build_see_1) %>% 
+  select(ResponseId, `real in some sense`:`build or discover`) %>% 
+  pivot_longer(cols=c(`real in some sense`:`build or discover`), names_to="question", values_to="value") %>%
+  group_by(question) %>%
+  mutate(mean_value = mean(value, na.rm = TRUE)) %>%
+  ungroup()
+
+#similar ridgline plot but for preferences of environment
+ggplot(ontology_table, aes(y = question, x = value, fill = question)) +
+  geom_density_ridges(alpha = 0.6, bandwidth = 4) +
+  scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+  #scale_y_discrete(position = "right") + 
+  scale_fill_viridis(discrete = TRUE) +
+  scale_color_viridis(discrete = TRUE) +
+  theme_ipsum() +
+  theme(
+    legend.position = "none",
+    panel.spacing = unit(0.1, "lines"),
+    strip.text.x = element_text(size = 8)
+  ) +
+  xlab("Response: Not real (0) to Real (100)") +
+  ylab("Questions of Reality")
+```
+
+## Correlations 
+
+```{r "Correlations Reality & Viz"}
+math_survey_rename <- math_survey %>% rename(
+  color = visualspatial_1
+  , shape = visualspatial_2
+  , relative_location = visualspatial_3
+  , tactile = sensory_1
+  , auditory = sensory_2
+  , olfactory = sensory_3
+  , dynamic = dynamic_1
+  , object_real = object_real_4
+  , object_exist = Q50_4
+  , build_or_see = build_see_1
+  , zoom = zoom_2
+  , resist_mvmt = resist_mvmt_3
+  , noise_noisy = noise_noisy_1
+  , hands_active = hands_active_1
+  , light_bright = light_bright_1
+  , hands_active = hands_active_1
+  , space_full = space_full_1
+  , visualization_proportion = prop_of_time_1
+  , people_company = people_company_1
+  , control = control_1
+  , surface_present = surface_need_1 ) %>% 
+  mutate( symbols = unlist(symbols)=="Yes"
+              , prop_causal = unlist(causal) == "Yes"
+              , domain_increasing_vividness = (domain_vivid == "More  vivid")
+              , session_increasing_vividness = (session_vivid == "More vivid")
+         #     , platonist = platonist %in% c("Sometimes", "Yes, always")
+              , constrained = constraint %in% c("Yes")
+               , annoyed = annoyed %in% c("Yes")
+              , appear_unwanted = appear == "Yes"
+              , fade_unwanted = fade == "Yes"
+              , cannot_stop_seeing = stop_seeing == "Yes"
+              , remain_present = stay_present == "Yes"
+              )
+ 
+msr <-  (math_survey_rename
+         %>% filter(math_ed %in% c("Ph.D. in Math", "Masters Degree in Math"
+                                           , "Some Graduate Coursework"))
+         %>% select(color, shape, relative_location, tactile, auditory, olfactory
+                    , symbols, dynamic, object_real, object_exist, build_or_see
+                    , zoom, symbols, resist_mvmt, prop_causal, domain_increasing_vividness
+                    , noise_noisy, hands_active, light_bright , hands_active #, platonist
+                    , visualization_proportion, space_full, annoyed, constrained
+                    , session_increasing_vividness
+                                       , remain_present
+                                       , cannot_stop_seeing
+                                       , fade_unwanted
+                                       , appear_unwanted
+                                       , control
+                                       , people_company
+                                       , surface_present)  ) 
+
+corrplot(cor(msr %>% select(domain_increasing_vividness, session_increasing_vividness, visualization_proportion, object_real, object_exist, build_or_see), use="pairwise.complete.obs"), order='hclust', method = "number")
+```
+
