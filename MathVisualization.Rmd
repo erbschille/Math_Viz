@@ -20,7 +20,6 @@ library(corrplot)
 library(ggwordcloud)
 library(forcats)
 library(ggridges)
-library(hrbrthemes)
 library(viridis)
 
 
@@ -283,7 +282,7 @@ ggplot(sensory_characteristics_table, aes(y = sensory_channel, x = value, fill =
   scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
   scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
-  theme_ipsum() +
+  #theme_ipsum() +
   theme(
     legend.position = "none",
     panel.spacing = unit(0.1, "lines"),
@@ -321,7 +320,7 @@ ggplot(pref_characteristics_table, aes(y = preference, x = value, fill = prefere
   #scale_y_discrete(position = "right") + 
   scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
-  theme_ipsum() +
+  #theme_ipsum() +
   theme(
     legend.position = "none",
     panel.spacing = unit(0.1, "lines"),
@@ -533,7 +532,7 @@ ggplot(ontology_table, aes(y = question, x = value, fill = question)) +
   #scale_y_discrete(position = "right") + 
   scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
-  theme_ipsum() +
+  #theme_ipsum() +
   theme(
     legend.position = "none",
     panel.spacing = unit(0.1, "lines"),
@@ -585,7 +584,7 @@ ggplot(control_table, aes(y = control_type, x = value, fill = control_type)) +
   scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
   scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
-  theme_ipsum() +
+  #theme_ipsum() +
   theme(
     legend.position = "none",
     panel.spacing = unit(0.1, "lines"),
@@ -633,8 +632,9 @@ ggplot(control_table2, aes(x = question, y = count, fill = response)) +
 # how much does amount of visualization affect these responses (just yes no) 
 contr_df <- math_survey %>% 
   select(ResponseId, prop_of_time_1, causal, constraint, appear, fade, stay_present, stop_seeing, annoyed) %>% 
-  dplyr::rename("Proportion of time spent visualizing" = prop_of_time_1
-    , "Any causal control?" = causal 
+  dplyr::rename(
+    #"Proportion of time spent visualizing" = prop_of_time_1
+     "Any causal control?" = causal 
     , "Any constraints on your control?" = constraint 
     , "Ever appear unprompted?"  = appear 
     , "Ever fade unprompted?"  = fade 
@@ -646,6 +646,7 @@ contr_df <- math_survey %>%
   drop_na(response) 
 
 contr_df %>% ggplot(aes(x=round(prop_of_time_1/100, 1), y=response, color=control_q, group = control_q)) + 
+  #stat_summary() + 
   geom_smooth(method = "lm", se = F) + 
   theme_minimal() +
   scale_y_discrete(expand = c(0,0)) +
@@ -654,9 +655,18 @@ contr_df %>% ggplot(aes(x=round(prop_of_time_1/100, 1), y=response, color=contro
        y = "Responses to Control Questions", 
        color = "Control Question")
 
-contr.m <- lm(response ~ 1 + `Proportion of time spent visualizing` + control_q, data = contr_df)
-summary(contr.m)  
 
+contr_df %>% ggplot(aes(x=round(prop_of_time_1/100, 1), y=response, color=control_q, group = control_q)) + 
+  stat_summary() + 
+  geom_smooth(method = "lm", se = F) + 
+  labs(title = "Control over Visualizations vs. Time Visualizing", 
+       x = "Proportion of time visualizing in a math session\n'Never' to 'Constantly'", 
+       y = "Responses to Control Questions", 
+       color = "Control Question")
+
+contr.m <- lm(response ~ 1+control_q, data = contr_df %>% filter(control_q !=  "Any causal control?" ))
+
+summary(contr.m)
 library(gtsummary)
 contr.m %>% 
     tbl_regression(intercept = TRUE) %>% 
@@ -1073,3 +1083,21 @@ msr.comp <- imputePCA(msr)
 msr.pca <- PCA(msr.comp$completeObs)
 
 ```
+
+
+
+```{r}
+math_survey_rename$domain_coding <- "not coded"
+math_survey_rename$domain_coding[math_survey_rename$domains %>% grep("[t|T]opology", .)] <- "Topology"
+math_survey_rename$domain_coding[math_survey_rename$domains %>% grep("[t|T]opological", .)] <- "Topology"
+math_survey_rename$domain_coding[math_survey_rename$domains %>% grep("[a|A]lgebraic [G|g]eometry", .)] <- "Algebraic Geometry"
+math_survey_rename$domain_coding[math_survey_rename$domains %>% grep("[a|A]lg [G|g]eom", .)] <- "Algebraic Geometry"
+math_survey_rename$domain_coding[math_survey_rename$domains %>% grep("[P|p]robability", .)] <- "Probability"
+math_survey_rename$domain_coding[math_survey_rename$domains %>% grep("[N|n]umber [T|t][h|g]eory", .)] <- "Number Theory"
+math_survey_rename %>% summarize(ct=n(), .by=domain_coding) %>% arrange(-ct)
+                          
+
+
+```
+
+
