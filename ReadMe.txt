@@ -1,1 +1,1 @@
-data and code for Math Visualization paper
+data and code for Mathematical Hallucination paper

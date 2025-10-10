@@ -1,6 +1,6 @@
 ---
 title: "Math Visualization for pub"
-author: "Eleanor Schille-Hudson"
+author: "Anonymized"
 date: "2025-10-09"
 output: html_document
 ---
@@ -127,7 +127,7 @@ ggplot(sensory_characteristics_table, aes(y = sensory_channel, x = value, fill =
 
 # Figure 2
 
-```{r "Cultivating Vividness"}
+```{r "Cultivating Vividness", fig.asp=1.25}
 math_survey <- math_survey %>% 
   mutate(session_vivid = factor(session_vivid, levels = c("They stay consistent in their  vividness", "It just depends", "It depends on where I am in a reasoning process", "More vivid")),
          domain_vivid = factor(domain_vivid, levels = c("Less  vivid", "They stay consistent in their vividness", "It just depends", "More  vivid")))
