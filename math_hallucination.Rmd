@@ -19,6 +19,7 @@ library(ggridges)
 library(hrbrthemes)
 library(viridis)
 library(kableExtra)
+library(scales)
 ```
 
 ```{r "read in data"}
@@ -108,20 +109,33 @@ sensory_characteristics_table <- math_survey %>%
 sensory_characteristics_table <- sensory_characteristics_table %>%
   mutate(sensory_channel = fct_reorder(sensory_channel, mean_value))
 
-# Create the ridgeline plot
-ggplot(sensory_characteristics_table, aes(y = sensory_channel, x = value, fill = sensory_channel)) +
-  geom_density_ridges(alpha = 0.6, bandwidth = 4, trim = TRUE) +
-  scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+# # Create the ridgeline plot
+# ggplot(sensory_characteristics_table, aes(y = sensory_channel, x = value, fill = sensory_channel)) +
+#   geom_density_ridges(alpha = 0.6, bandwidth = 4, trim = TRUE) +
+#   scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+#   scale_fill_viridis(discrete = TRUE) +
+#   scale_color_viridis(discrete = TRUE) +
+#   theme_ipsum() +
+#   theme(
+#     legend.position = "none",
+#     panel.spacing = unit(0.1, "lines"),
+#     strip.text.x = element_text(size = 8)
+#   ) +
+#   xlab("Response: Never (0) to Always (100)") +
+#   ylab("Sensory Modality")
+
+#violinplot version
+ggplot(sensory_characteristics_table, aes(y = value, x = sensory_channel, fill = sensory_channel)) +
+  geom_violin(scale = "width", alpha = 0.6) +
+  geom_dotplot(binaxis = "y",
+               stackdir = "center",
+               dotsize = 0.2) +
+  scale_y_continuous() +
   scale_fill_viridis(discrete = TRUE) +
-  scale_color_viridis(discrete = TRUE) +
   theme_ipsum() +
-  theme(
-    legend.position = "none",
-    panel.spacing = unit(0.1, "lines"),
-    strip.text.x = element_text(size = 8)
-  ) +
-  xlab("Response: Never (0) to Always (100)") +
-  ylab("Sensory Modality")
+  theme(legend.position = "none") +
+  ylab("Response: Never (0) to Always (100)") +
+  xlab("Sensory Modality")
 ```
 
 
@@ -129,40 +143,61 @@ ggplot(sensory_characteristics_table, aes(y = sensory_channel, x = value, fill =
 
 ```{r "Cultivating Vividness", fig.asp=1.25}
 math_survey <- math_survey %>% 
-  mutate(session_vivid = factor(session_vivid, levels = c("They stay consistent in their  vividness", "It just depends", "It depends on where I am in a reasoning process", "More vivid")),
+  mutate(session_vivid = factor(session_vivid, levels = c("Less vivid", "They stay consistent in their  vividness", "It just depends", "It depends on where I am in a reasoning process", "More vivid")),
          domain_vivid = factor(domain_vivid, levels = c("Less  vivid", "They stay consistent in their vividness", "It just depends", "More  vivid")))
 
-ggplot(math_survey, aes(x = session_vivid)) + 
-  geom_bar(fill = "#C3D7A4") + 
-  theme_bw() +
-    geom_text(
-    stat = 'count', 
-    aes(label = ..count..), 
-    vjust = 2
-  ) +
-  labs(
-    title = "Across a math session, visualizations typically become...",
-    x = "Responses",
-    y = "Count"
-  ) +
-  scale_x_discrete(labels = function(x) str_wrap(x, width = 20))
+plot_data <- math_survey %>%
+  count(session_vivid) %>%
+  complete(session_vivid, fill = list(n = 0))
 
-ggplot(math_survey, aes(x = domain_vivid)) + 
+ggplot(plot_data, aes(y = session_vivid, x = n)) +
+  geom_col(fill = "#C3D7A4") +
+  geom_text(
+    aes(label = n),
+    size = 6,
+    hjust = -0.1
+  ) +
+  theme_bw() +
+  labs(
+    title = "Across a math session,\nvisualizations typically become...",
+    x = "Count", 
+    y = ""
+  ) +
+  scale_y_discrete(
+    drop = FALSE,
+    labels = function(x) str_wrap(x, width = 20)
+  ) +
+  theme(
+    axis.text.x = element_text(size = 15),
+    axis.title.x = element_text(size = 20),
+    #axis.title.y = element_text(size = 20),
+    axis.text.y = element_text(size = 18),
+    plot.title = element_text(size = 20)
+  ) +
+  coord_cartesian(xlim = c(0, max(plot_data$n) + 1))
+
+
+ggplot(math_survey, aes(y = domain_vivid)) + 
   geom_bar(fill = "#4E84C4") + 
   theme_bw() +
     theme_bw() +
     geom_text(
     stat = 'count', 
-    aes(label = ..count..), 
+    aes(label = ..count..), size = 6,
     color = "white",
-    vjust = 1.5
+    hjust = 1.2
   ) +
   labs(
-    title = "As I become expert in a domain, visualizations typically become...",
-    x = "Responses",
-    y = "Count"
+    title = "As I become expert in a domain,\nvisualizations typically become...",
+    x = "Count", 
+    y = ""
   ) +
-  scale_x_discrete(labels = function(x) str_wrap(x, width = 20))
+  scale_y_discrete(labels = function(x) str_wrap(x, width = 20)) +
+  theme(axis.text.x = element_text(size = 15),
+        axis.title.x = element_text(size = 20),
+        #axis.title.y = element_text(size = 20),
+        axis.text.y = element_text(size = 18),
+        plot.title = element_text(size = 20)) 
 ```
 
 # Figure 3
@@ -174,32 +209,47 @@ survey_minus_zeros <- math_survey %>% slice(19:72)
 
 pref_characteristics_table <- survey_minus_zeros %>% 
   mutate(
-    silent = noise_noisy_1
-    , alone = people_company_1
-    , `surface doesn't matter`  = surface_need_1
-    , `hands idle` = hands_active_1
-    , `dim light` = light_bright_1
-    , `empty space` = space_full_1) %>% 
+    silent = 100 - noise_noisy_1
+    , alone = 100 - people_company_1
+    , `need particular surface`  = surface_need_1 
+    , `hands idle` = 100 - hands_active_1
+    , `dim light` = 100 - light_bright_1
+    , `empty space` = 100 - space_full_1) %>% 
   select(ResponseId, silent:`empty space`) %>% 
   pivot_longer(cols=c(silent:`empty space`), names_to="preference", values_to="value") %>%
   group_by(preference) %>%
   mutate(mean_value = mean(value, na.rm = TRUE)) %>%
   ungroup()
 
-#similar ridgline plot but for preferences of environment
-ggplot(pref_characteristics_table, aes(y = preference, x = value, fill = preference)) +
-  geom_density_ridges(alpha = 0.6, bandwidth = 4) +
-  scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
-  #scale_y_discrete(position = "right") + 
+# #similar ridgline plot but for preferences of environment
+# ggplot(pref_characteristics_table, aes(y = preference, x = value, fill = preference)) +
+#   geom_density_ridges(alpha = 0.6, bandwidth = 4) +
+#   scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+#   #scale_y_discrete(position = "right") +
+#   scale_fill_viridis(discrete = TRUE) +
+#   scale_color_viridis(discrete = TRUE) +
+#   theme_ipsum() +
+#   theme(
+#     legend.position = "none",
+#     panel.spacing = unit(0.1, "lines"),
+#     strip.text.x = element_text(size = 8)
+#   ) +
+#   xlab("Response: Must be this way (0) to Must be the opposite (100)") +
+#   ylab("Environmental Preferences")
+
+#violinplot version
+ggplot(pref_characteristics_table,
+       aes(x = preference, y = value, fill = preference)) +
+  geom_violin(scale = "width", alpha = 0.6) +
+  geom_dotplot(binaxis = "y",
+               stackdir = "center",
+               dotsize = 0.3) +
+  scale_y_continuous() +
   scale_fill_viridis(discrete = TRUE) +
-  scale_color_viridis(discrete = TRUE) +
   theme_ipsum() +
-  theme(
-    legend.position = "none",
-    panel.spacing = unit(0.1, "lines"),
-    strip.text.x = element_text(size = 8)
-  ) +
-  xlab("Response: Must be this way (0) to Must be the opposite (100)") +
+  theme(legend.position = "none") +
+  scale_x_discrete(labels = label_wrap(20)) +
+  xlab("Response: Must be the opposite (0) to Must be this way (100)") +
   ylab("Environmental Preferences")
 ```
 
@@ -378,11 +428,28 @@ control_table <- math_survey %>%
 control_table <- control_table %>%
   mutate(control_table = fct_reorder(control_type, mean_value))
 
-# Create the ridgeline plot
-ggplot(control_table, aes(y = control_type, x = value, fill = control_type)) +
-  geom_density_ridges(alpha = 0.6, bandwidth = 4, trim = TRUE) +
-  scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
-  scale_fill_viridis(discrete = TRUE) +
+# # Create the ridgeline plot
+# ggplot(control_table, aes(y = control_type, x = value, fill = control_type)) +
+#   geom_density_ridges(alpha = 0.6, bandwidth = 4, trim = TRUE) +
+#   scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+#   scale_fill_viridis(discrete = TRUE) +
+#   scale_color_viridis(discrete = TRUE) +
+#   theme_ipsum() +
+#   theme(
+#     legend.position = "none",
+#     panel.spacing = unit(0.1, "lines"),
+#     strip.text.x = element_text(size = 8)
+#   ) +
+#   xlab("Response: Never (0) to Always (100)") +
+#   ylab("Kind of Control")
+
+#violinplot version
+ggplot(control_table, aes(x = control_type, y = value, fill = control_type)) +
+  geom_violin(scale = "width", alpha = 0.6) +
+  geom_dotplot(binaxis = "y",
+               stackdir = "center",
+               dotsize = 0.5) +
+ scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
   theme_ipsum() +
   theme(
@@ -390,6 +457,7 @@ ggplot(control_table, aes(y = control_type, x = value, fill = control_type)) +
     panel.spacing = unit(0.1, "lines"),
     strip.text.x = element_text(size = 8)
   ) +
+   scale_x_discrete(labels = label_wrap(30)) +
   xlab("Response: Never (0) to Always (100)") +
   ylab("Kind of Control")
 ```
@@ -399,21 +467,38 @@ ggplot(control_table, aes(y = control_type, x = value, fill = control_type)) +
 ```{r "Metaphysical Reality"}
 ontology_table <- math_survey %>% 
   mutate(
-    `real in some sense` = object_real_4
-    , `physically exist` = Q50_4
-    , `build or discover`  = build_see_1) %>% 
-  select(ResponseId, `real in some sense`:`build or discover`) %>% 
-  pivot_longer(cols=c(`real in some sense`:`build or discover`), names_to="question", values_to="value") %>%
+    `Not real in any sense (0) or Real in some sense (100)` = object_real_4
+    , `Don't physically exist (0) or Physically exist (100)` = Q50_4
+    , `Build (0) or Discover (100)`  = build_see_1) %>% 
+  select(ResponseId, `Not real in any sense (0) or Real in some sense (100)`:`Build (0) or Discover (100)`) %>% 
+  pivot_longer(cols=c(`Not real in any sense (0) or Real in some sense (100)`:`Build (0) or Discover (100)`), names_to="question", values_to="value") %>%
   group_by(question) %>%
   mutate(mean_value = mean(value, na.rm = TRUE)) %>%
   ungroup()
 
-#similar ridgline plot but for preferences of environment
-ggplot(ontology_table, aes(y = question, x = value, fill = question)) +
-  geom_density_ridges(alpha = 0.6, bandwidth = 4) +
-  scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
-  #scale_y_discrete(position = "right") + 
-  scale_fill_viridis(discrete = TRUE) +
+# #similar ridgline plot but for preferences of environment
+# ggplot(ontology_table, aes(y = question, x = value, fill = question)) +
+#   geom_density_ridges(alpha = 0.6, bandwidth = 4) +
+#   scale_x_continuous(limits = c(0, 100), expand = c(0, 0)) +
+#   #scale_y_discrete(position = "right") + 
+#   scale_fill_viridis(discrete = TRUE) +
+#   scale_color_viridis(discrete = TRUE) +
+#   theme_ipsum() +
+#   theme(
+#     legend.position = "none",
+#     panel.spacing = unit(0.1, "lines"),
+#     strip.text.x = element_text(size = 8)
+#   ) +
+#   xlab("Response: Not real (0) to Real (100)") +
+#   ylab("Questions of Reality")
+
+#violinplot version
+ggplot(ontology_table, aes(x = question, y = value, fill = question)) +
+  geom_violin(scale = "width", alpha = 0.6) +
+  geom_dotplot(binaxis = "y",
+               stackdir = "center",
+               dotsize = 0.5) +
+ scale_fill_viridis(discrete = TRUE) +
   scale_color_viridis(discrete = TRUE) +
   theme_ipsum() +
   theme(
@@ -421,8 +506,9 @@ ggplot(ontology_table, aes(y = question, x = value, fill = question)) +
     panel.spacing = unit(0.1, "lines"),
     strip.text.x = element_text(size = 8)
   ) +
-  xlab("Response: Not real (0) to Real (100)") +
-  ylab("Questions of Reality")
+   scale_x_discrete(labels = label_wrap(30)) +
+  xlab("") +
+  ylab("Questions of Reality") 
 ```
 
 ## Correlations 
